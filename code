@@ -1,0 +1,146 @@
+!apt-get install -y -qq software-properties-common python-software-properties module-init-tools
+!add-apt-repository -y ppa:alessandro-strada/ppa 2>&1 > /dev/null
+!apt-get update -qq 2>&1 > /dev/null
+!apt-get -y install -qq google-drive-ocamlfuse fuse
+from google.colab import auth
+auth.authenticate_user()
+from oauth2client.client import GoogleCredentials
+creds = GoogleCredentials.get_application_default()
+import getpass
+!google-drive-ocamlfuse -headless -id={creds.client_id} -secret={creds.client_secret} < /dev/null 2>&1 | grep URL
+vcode = getpass.getpass()
+!echo {vcode} | google-drive-ocamlfuse -headless -id={creds.client_id} -secret={creds.client_secret}
+
+"""# Driver kontrolü"""
+
+!mkdir -p drive
+!google-drive-ocamlfuse drive
+!ls
+
+"""Drive içine bakma
+
+"""
+
+!ls drive
+
+"""Drivedan dosya seçme"""
+
+import os 
+os.chdir("/content/drive/Colab_Notebooks")
+!pwd
+
+!ls
+
+"""Keras kütüphane çağırma"""
+
+!pip install -q keras
+
+"""Uygulama Başlangıç"""
+
+# Bu import işlemlerini yapmadan gelecek aşamaları kullanamayız.
+#hata alınır. Bunun için keras kütüphanesi için hazırlanmış olan
+#araçları kullanacağız.
+from __future__ import print_function
+import keras
+from keras.datasets import mnist
+from keras.models import load_model
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv2D, MaxPooling2D
+from keras import backend as K
+
+import matplotlib.pyplot as plt
+
+"""Gerekli sınırları ayarlıyoruz"""
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+"""Verileri Görselleştirelim"""
+
+plt.figure(figsize=(14,14))
+x, y = 10, 4
+for i in range(40): #veri setinden rastgele 40 resim göster
+  plt.subplot(y, x, i+1)
+  plt.imshow(x_train[i])
+plt.show()
+
+#Bu veri setlerini paket olarak eğitmesi
+batch_size = 128
+num_classes = 10
+# eğitimin kaç epochla gerçekleşeceği
+epochs = 2 # 12 epochs öneriliyor
+
+img_rows, img_cols = 28, 28
+
+if K.image_data_format() == 'channels_first':
+    x_train = x_train.reshape(x_train.shape[0], 1, img_rows, img_cols)
+    x_test = x_test.reshape(x_test.shape[0], 1, img_rows, img_cols)
+    input_shape = (1, img_rows, img_cols)
+else:
+    x_train = x_train.reshape(x_train.shape[0], img_rows, img_cols, 1)
+    x_test = x_test.reshape(x_test.shape[0], img_rows, img_cols, 1)
+    input_shape = (img_rows, img_cols, 1)
+
+y_train = keras.utils.to_categorical(y_train, num_classes)
+y_test = keras.utils.to_categorical(y_test, num_classes)
+
+"""# Model Oluşturma"""
+
+model = Sequential()
+
+"""Katmanların oluşturulması"""
+
+#evrişim katmanı ekleyelim "kernel size" (filtre boyutu) 3, 3 olsun
+model.add(Conv2D(32, kernel_size=(3, 3),
+                 activation = 'relu',
+                 input_shape = input_shape))
+
+model.add(Conv2D(64, (3, 3), activation = 'relu'))
+#maksimum ortaklama katmanı ekleyelim
+model.add(MaxPooling2D(pool_size=(2, 2)))
+#nöron silmek (%25) lazım bunun sebebi aşırı alakasız üretimin önüne geçme
+model.add(Dropout(0.25)) #"0.25" %25 demek
+model.add(Flatten()) #Tam bağalantılı veya full bağlantılı katman için kullandık
+model.add(Dense(128, activation = 'relu')) # 128 nörondan oluşan relu aktivasyonu yaptık
+model.add(Dropout(0.5)) # Bu sefer %50 sini sildik
+model.add(Dense(num_classes, activation='softmax'))
+
+"""Model Görselleştirme"""
+
+model.summary()
+
+model.compile(loss = keras.losses.categorical_crossentropy,
+             optimizer = keras.optimizers.Adadelta(),
+             metrics = ['accuracy'])
+
+"""# Eğitim İşlemleri"""
+
+model.fit(x_train, y_train,
+          batch_size=batch_size,
+          epochs=epochs,
+          verbose=1,
+          validation_data=(x_test, y_test))
+
+# Bu şekilde kayıt edersek ileride tekrar eğitmek yerine hazır çağıra biliriz
+model.save('save_models/mnist_model.h5') # Dosya drive da bulunduğumuz klasöre kayıt olur
+
+# Test işlemi ve ekrana yazdırma
+score = model.evaluate(x_test, y_test, verbose=0)
+print('Test Loss:', score[0])
+print('Test Accuracy:', score[1])
+
+"""Rastgele değer için test işlemi"""
+
+test_image = x_test[32]
+y_test[32]
+
+#şimdi değeri ekrana yazdıralım
+plt.imshow(test_image.reshape(28,28))
+
+#üsteki çıkan değere test işlemi yapalım
+test_data = x_test[32].reshape(1,28,28,1)
+pre = model_test.predict(test_data, batch_size=1)
+
+preds = model_test.predict_classes(test_data)
+prob = model_test.predict_proba(test_data)
+print(preds, prob)
